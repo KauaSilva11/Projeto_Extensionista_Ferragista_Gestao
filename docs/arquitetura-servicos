@@ -1,0 +1,205 @@
+# Arquitetura técnica — Ferragista
+
+**Status:** rascunho para revisão do grupo  
+**Base:** proposta técnica elaborada no projeto e decisões confirmadas nesta conversa.  
+**Observação:** este documento orienta o MVP e deve ser revisado pelo grupo antes de ser tratado como versão aprovada.
+
+## 1. Visão geral
+
+O sistema terá uma interface web em React e TypeScript. As chamadas do navegador entrarão pelo API Gateway e seguirão para serviços especializados. Os serviços se comunicarão por APIs REST síncronas, trocando JSON.
+
+A proposta mantém serviços separados por responsabilidade, mas busca limitar a complexidade: não prevê broker de mensagens no MVP. Decisão confirmada: será usada uma única instância PostgreSQL com quatro bancos lógicos, com nomes sugeridos ferragista_auth, ferragista_estoque, ferragista_vendas e ferragista_financeiro. Cada serviço se conecta ao seu próprio banco, é responsável pelos dados nele armazenados e não consulta diretamente as tabelas dos outros serviços.
+
+## 2. Componentes e responsabilidades
+
+| Componente | Responsabilidade e dados sob sua propriedade |
+|---|---|
+| Frontend | Telas do sistema em React + TypeScript; envia o token JWT nas chamadas autenticadas. |
+| API Gateway | Ponto de entrada das APIs; encaminha as requisições ao serviço correspondente. |
+| Auth/Users Service | Cadastro e autenticação de usuários; mantém identidade, credenciais e perfil (proprietário ou funcionário); emite JWT. |
+| Product/Stock Service | Cadastro e edição de produtos, preços e quantidades em estoque; verifica disponibilidade, baixa estoque e processa compensação de uma venda. |
+| Sales Service | Registra vendas e itens vendidos; coordena as chamadas de estoque e financeiro; mantém preço histórico dos itens vendidos. |
+| Financial Service | Registra receitas e despesas, pagamentos, fluxo de caixa e relatórios financeiros. Despesas só afetam o caixa quando pagas. |
+
+## 3. Dados e persistência
+
+Decisão confirmada: uma instância PostgreSQL conterá quatro bancos lógicos, um por serviço, com estes nomes sugeridos: Auth/Users usa ferragista_auth; Product/Stock usa ferragista_estoque; Sales usa ferragista_vendas; Financial usa ferragista_financeiro. Cada aplicação Spring Boot conecta-se ao banco correspondente e acessa somente seus próprios dados.
+
+- Auth/Users: usuários e perfis de acesso.
+- Product/Stock: produtos, preços atuais e quantidades.
+- Sales: vendas, itens e preços registrados no momento da venda.
+- Financial: receitas, despesas, situação de pagamento e dados para caixa/relatórios.
+
+As chamadas entre serviços devem transportar apenas os dados necessários ao fluxo. Não haverá leitura direta de tabelas de outro serviço.
+
+## 4. Autenticação e autorização
+
+1. O usuário envia suas credenciais ao Auth/Users Service.
+2. O serviço valida as credenciais e emite um JWT com a identidade e o perfil do usuário.
+3. O frontend envia o token no cabeçalho `Authorization: Bearer <token>` em chamadas protegidas.
+4. O Gateway encaminha a requisição ao serviço correspondente.
+5. Quando um serviço chama outro para atender à mesma solicitação, encaminha o JWT recebido.
+6. Cada serviço valida o JWT e aplica as permissões de sua responsabilidade.
+
+O proprietário pode acessar todas as áreas. O funcionário pode operar produtos/estoque e vendas, além de registrar e editar receitas e despesas conforme as regras definidas; não pode consultar fluxo de caixa nem relatórios financeiros. A autorização deve ser aplicada no backend, não somente escondendo telas no frontend. Somente o API Gateway será exposto ao frontend; os serviços internos serão acessados pela rede interna da aplicação.
+
+## 5. Comunicação e fluxo de venda
+
+A venda será coordenada pelo Sales Service usando chamadas REST síncronas:
+
+1. O frontend envia ao Gateway os identificadores dos produtos e as quantidades desejadas.
+2. O Gateway encaminha a requisição ao Sales Service.
+3. Sales gera um `saleId` UUID e cria um registro inicial com estado `PENDENTE`.
+4. Sales solicita ao Product/Stock Service que confira todos os itens e, se houver estoque suficiente, faça a baixa das quantidades. O serviço de estoque devolve os preços atuais do catálogo. Se algum item não tiver estoque suficiente, nenhuma quantidade é baixada, Sales marca a tentativa como REJEITADA e retorna 409.
+5. Sales registra esses preços como históricos e solicita ao Financial Service o registro da receita associada ao mesmo `saleId`.
+6. Se o Financeiro confirmar, Sales atualiza o estado para `CONCLUIDA` e informa sucesso ao frontend.
+7. Se o registro financeiro falhar, Sales solicita a compensação do estoque. Se a compensação funcionar, a venda passa para `CANCELADA`; se também falhar, permanece `PENDENTE_RECONCILIACAO` para correção manual.
+
+A venda só é apresentada como concluída depois que estoque e receita forem confirmados. O `saleId` correlaciona a venda, a receita e uma eventual compensação, e permite reconhecer reenvios da mesma operação.
+
+### Falha da própria compensação
+
+Decisão confirmada para o MVP: se a receita não puder ser registrada e a compensação do estoque também falhar, Sales mantém a operação como `PENDENTE_RECONCILIACAO`, identificada pelo `saleId`. A operação não será apresentada como venda concluída. A equipe deverá verificar os registros e corrigir manualmente o caso. O MVP não terá mecanismo automático de reconciliação.
+
+## 6. Contratos REST iniciais
+
+Caminhos confirmados como contratos iniciais. As rotas /internal são acessíveis apenas pela rede interna entre serviços.
+
+Formato inicial confirmado para o pedido enviado pelo frontend ao Gateway:
+
+```json
+{
+  "itens": [
+    {
+      "produtoId": "identificador-do-produto",
+      "quantidade": 2
+    }
+  ]
+}
+```
+
+| Operação | Método e caminho | Serviço chamado | Dados principais |
+|---|---|---|---|
+| Criar venda | POST /api/sales | Gateway → Sales | Lista de itens com produtoId e quantidade; o cliente não informa preço. |
+| Validar e baixar estoque | POST /internal/stock/sales | Sales → Product/Stock | Recebe saleId e todos os itens. Confere o conjunto e só baixa se todos tiverem estoque; em caso de insuficiência, não baixa nenhum. Na confirmação, retorna os preços atuais. |
+| Registrar receita | POST /internal/financial/revenues | Sales → Financial | Recebe saleId e valor total calculado por Sales; registra data/hora ao receber e evita duplicar receita para o mesmo saleId. |
+| Compensar estoque | POST /internal/stock/sales/{saleId}/compensation | Sales → Product/Stock | Recebe saleId; usa o registro da baixa para restaurar as quantidades uma única vez. Reenvios não duplicam a reposição.
+
+Regra confirmada para o contrato inicial: o cliente informa apenas identificador do produto e quantidade; não envia preço. Product/Stock retorna o preço atual, que Sales registra como preço histórico da venda. Os caminhos e o formato comum dos erros estão confirmados; detalhes adicionais do corpo de sucesso podem ser refinados durante a implementação.
+
+Regra confirmada para a chamada de estoque: Sales envia o saleId e a lista completa de itens; Product/Stock valida todos os itens e só efetua a baixa se houver estoque suficiente para cada um. Se algum item for insuficiente, nenhuma quantidade é baixada. A resposta de sucesso inclui os preços atuais do catálogo.
+
+Regra confirmada para a chamada financeira: Sales envia o saleId e o valor total calculado com os preços retornados pelo estoque. Financial registra a data/hora ao receber a solicitação e reconhece reenvios pelo mesmo saleId para não duplicar a receita.
+
+Regra confirmada para compensação: Product/Stock mantém o registro da baixa associado ao saleId. Sales solicita a compensação usando esse identificador; Estoque restaura as quantidades uma única vez e reconhece reenvios para não duplicar a reposição.
+
+### Respostas HTTP iniciais
+
+| Situação | Resposta confirmada |
+|---|---|
+| Venda concluída | 201 Created, com saleId, estado CONCLUIDA, itens, preços unitários e valor total. |
+| Dados inválidos | 400 Bad Request. |
+| Usuário não autenticado | 401 Unauthorized. |
+| Usuário sem permissão | 403 Forbidden. |
+| Estoque insuficiente | 409 Conflict; tentativa marcada como REJEITADA e nenhum item é baixado. |
+| Serviço necessário indisponível | 503 Service Unavailable. Se a receita falhar e a compensação funcionar, a resposta informa estado CANCELADA. Se a compensação falhar ou o resultado do estoque não puder ser confirmado, informa PENDENTE_RECONCILIACAO e o saleId. |
+
+Formato comum confirmado para erros (saleId e detalhes são opcionais quando não se aplicarem):
+
+{
+  "codigo": "ESTOQUE_INSUFICIENTE",
+  "mensagem": "Não há estoque suficiente para concluir a venda.",
+  "saleId": "uuid-da-venda",
+  "detalhes": [
+    {
+      "produtoId": "identificador-do-produto",
+      "quantidadeSolicitada": 2,
+      "quantidadeDisponivel": 1
+    }
+  ]
+}
+
+Para uma venda pendente de reconciliação, a resposta também inclui o estado da venda.
+
+## 7. Tratamento de falhas e consistência
+
+Como não há uma transação única abrangendo bancos de serviços diferentes, o fluxo usa coordenação pelo Sales Service e compensação para o caso previsto de falha financeira após a baixa de estoque. Os serviços devem validar operações repetidas usando o identificador da venda, para reduzir duplicidade em reenvios.
+
+Falhas de comunicação devem resultar em respostas de erro claras; uma dependência indisponível não pode ser tratada como confirmação de sucesso. Decisão confirmada: se a compensação falhar ou houver timeout sem confirmação do resultado de uma operação de estoque, Sales mantém a venda como PENDENTE_RECONCILIACAO, informa o saleId e a equipe verifica os registros antes de corrigir manualmente. O MVP não terá reconciliação automática.
+
+## 8. Tecnologias confirmadas pelo grupo
+
+- Java 21, Spring Boot e Maven nos serviços backend.
+- Spring Cloud Gateway como API Gateway.
+- PostgreSQL para persistência.
+- JWT para autenticação das chamadas protegidas.
+- React, TypeScript e Vite no frontend.
+- APIs REST com JSON para comunicação entre frontend, Gateway e serviços.
+
+## 9. Diagrama do fluxo principal
+
+```mermaid
+sequenceDiagram
+    actor Usuario
+    participant Front as Frontend
+    participant GW as API Gateway
+    participant Sales as Sales Service
+    participant Stock as Product/Stock Service
+    participant Fin as Financial Service
+
+    Usuario->>Front: Confirma venda
+    Front->>GW: POST /api/sales + JWT
+    GW->>Sales: Encaminha requisição
+    Sales->>Sales: Cria venda PENDENTE (saleId)
+    Sales->>Stock: Validar e baixar estoque (saleId)
+    alt Estoque suficiente
+        Stock-->>Sales: Confirmação + preços atuais
+        Sales->>Sales: Registra preços históricos
+        Sales->>Fin: Registrar receita (saleId)
+        alt Receita registrada
+            Fin-->>Sales: Confirmação
+            Sales->>Sales: Atualiza para CONCLUIDA
+            Sales-->>GW: Venda concluída (201)
+            GW-->>Front: Sucesso
+        else Falha ao registrar receita
+            Fin-->>Sales: Erro
+            Sales->>Stock: Compensar baixa (saleId)
+            alt Compensação concluída
+                Stock-->>Sales: Estoque restaurado
+                Sales->>Sales: Atualiza para CANCELADA
+            else Compensação falhou
+                Stock-->>Sales: Erro
+                Sales->>Sales: Mantém PENDENTE_RECONCILIACAO
+            end
+            Sales-->>GW: Operação não concluída (503)
+            GW-->>Front: Erro com saleId e estado
+        end
+    else Estoque insuficiente
+        Stock-->>Sales: Nenhuma baixa realizada
+        Sales->>Sales: Atualiza para REJEITADA
+        Sales-->>GW: Estoque insuficiente (409)
+        GW-->>Front: Erro
+    else Resultado do estoque não confirmado
+        Sales->>Sales: Mantém PENDENTE_RECONCILIACAO
+        Sales-->>GW: Resultado não confirmado (503)
+        GW-->>Front: Erro com saleId e estado
+    end
+```
+
+## 10. Decisões confirmadas para o MVP
+
+- Quatro serviços: Auth/Users, Product/Stock, Sales e Financial.
+- Uma instância PostgreSQL com quatro bancos lógicos, um por serviço; cada serviço é dono dos próprios dados e não acessa diretamente as tabelas dos outros.
+- Pedido de venda contém produtoId e quantidade; o frontend não informa preço.
+- Product/Stock verifica todos os itens e só baixa o estoque se todos tiverem quantidade suficiente; em caso contrário, não baixa nenhum.
+- Sales preserva os preços retornados pelo estoque como preços históricos.
+- Financial recebe saleId e valor total; registra a data/hora de recebimento e evita duplicar receita para o mesmo saleId.
+- Product/Stock mantém o registro da baixa por saleId e aplica a compensação uma única vez.
+- Estados considerados: PENDENTE, CONCLUIDA, CANCELADA, REJEITADA e PENDENTE_RECONCILIACAO.
+- Falha ou timeout sem confirmação da operação de estoque, ou falha da compensação, requer reconciliação manual pelo saleId; não há reconciliação automática no MVP.
+- Chamadas internas encaminham o JWT do usuário, que cada serviço valida; apenas o Gateway é acessível ao frontend.
+- Caminhos REST iniciais: POST /api/sales; POST /internal/stock/sales; POST /internal/financial/revenues; POST /internal/stock/sales/{saleId}/compensation. Rotas internas são acessíveis apenas pela rede dos serviços.
+- Respostas HTTP e formato comum dos erros conforme definidos na seção 6.
+
+
+

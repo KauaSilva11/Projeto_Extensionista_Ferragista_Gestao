@@ -1,27 +1,34 @@
-# Projeto Extensionista — Ferragista
+# Projeto Extensionista — Sistema de Gestão da Ferragista
 
-Sistema de gestão financeira para pequenos negócios — Projeto Extensionista.
+Sistema web para apoiar a gestão de produtos, estoque, vendas e finanças da Ferragista Mundial.
 
-> **Status:** ambiente de colaboração criado. O escopo, os requisitos e a arquitetura ainda serão conferidos com os documentos oficiais do projeto.
+**Status:** requisitos e regras de negócio consolidados; arquitetura aprovada pelo grupo. O repositório contém a infraestrutura inicial do banco e o scaffold padrão do frontend. Os serviços backend ainda não têm implementação.
 
-## Sobre o repositório
+## Escopo do MVP
 
-Este repositório será usado para organizar a documentação e, após a validação do escopo, o desenvolvimento do sistema.
+- Usuários autenticados com perfis de proprietário e funcionário.
+- Cadastro de produtos e controle de estoque.
+- Registro de vendas com verificação e baixa de estoque.
+- Registro de receitas e despesas; somente despesas pagas reduzem o fluxo de caixa.
+- Fluxo de caixa e relatórios financeiros acessíveis somente ao proprietário.
 
-## Tecnologias em avaliação
+Consulte `docs/requisitos.md`, `docs/regras-de-negocio.md` e `docs/arquitetura-servicos` para os requisitos e contratos aprovados.
 
-A proposta inicial menciona Java 21, Spring Boot, PostgreSQL, APIs REST, API Gateway e serviços especializados. A equipe ainda precisa confirmar essas escolhas após analisar a documentação existente.
+## Tecnologias
 
-## Como contribuir
+- Backend: Java 21, Spring Boot e Maven.
+- Gateway: Spring Cloud Gateway.
+- Frontend: React, TypeScript e Vite.
+- Banco: PostgreSQL, em uma instância com quatro bancos lógicos.
+- Integração: APIs REST com JSON; autenticação JWT.
 
-Fluxo inicial proposto:
+## Estado do repositório
 
-1. Escolha ou combine a tarefa antes de começar.
-2. Trabalhe em uma branch própria para a tarefa.
-3. Faça commits com mensagens que expliquem a alteração.
-4. Abra um Pull Request para `main` e peça revisão de um colega.
-5. Integre as mudanças após a revisão.
+- `infrastructure/postgres/`: Docker Compose, exemplo de configuração e script para criar os quatro bancos lógicos.
+- `frontend/`: scaffold inicial do React/Vite, ainda sem as telas do sistema.
+- `services/`: cada serviço possui somente um README inicial; endpoints e regras ainda não foram implementados.
+- A localização do API Gateway na estrutura do repositório deve ser definida antes da implementação do componente.
 
-## Situação atual
+## Colaboração
 
-O repositório e os convites da equipe foram criados. Os convites ainda precisam ser aceitos. A implementação do sistema não começou.
+O grupo acompanha o trabalho no GitHub Projects. Desenvolva cada tarefa em uma branch própria, abra um Pull Request para `main` e peça revisão de outro integrante. Integre após aprovação. Não versione credenciais ou arquivos `.env`; use `.env.example` sem segredos.

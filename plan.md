@@ -1,35 +1,34 @@
 # Plano do projeto — Ferragista Mundial
 
 ## Objetivo
-Entregar um MVP web para gestão de usuários, produtos, estoque, vendas e finanças da Ferragista Mundial. Escopo e regras detalhados em `docs/requisitos.md` e `docs/regras-de-negocio.md`.
+Entregar o MVP descrito em `docs/requisitos.md` e `docs/regras-de-negocio.md`, respeitando a arquitetura aprovada em `docs/arquitetura-servicos`.
 
-## Stack e arquitetura confirmadas
-- Frontend: React, TypeScript e Vite.
-- Backend: Java 21, Spring Boot, Maven; gateway com Spring Cloud Gateway.
-- Persistência: PostgreSQL; autenticação JWT; APIs REST com JSON.
-- Serviços previstos: Auth/Users, Product/Stock, Sales e Financial; API Gateway encaminha requisições.
-- Scrum simplificado; GitHub Projects, branches e Pull Requests.
-- Uma instância PostgreSQL com bancos lógicos `ferragista_auth`, `ferragista_estoque`, `ferragista_vendas` e `ferragista_financeiro`.
-- Localização do gateway na estrutura do repositório ainda precisa ser definida conforme o padrão documentado.
+## Estado confirmado
+- Arquitetura aprovada pelo grupo, sem alterações substantivas; o cabeçalho do documento registra esse estado.
+- Pull Request #21, **“docs: adicionar instruções e plano do projeto”**, aguarda revisão. Estado no GitHub Projects: **Em revisão**; prioridade: **Média**.
+- PostgreSQL Compose e script de criação dos quatro bancos lógicos estão no repositório.
+- Frontend contém apenas o scaffold padrão do Vite.
+- Auth, Product/Stock, Sales e Financial contêm apenas READMEs; código dos serviços ainda não começou.
 
-## Estado
-- Requisitos, regras e arquitetura estão documentados em `docs/`.
-- Estrutura inicial de frontend, serviços e infraestrutura existe; isso não confirma implementação de endpoints.
-- Conforme o último resumo do notebook: Java 21, Node/npm, Git, WSL 2 e Docker Desktop estão instalados; PostgreSQL no Docker Compose foi confirmado em execução.
-- Ainda falta confirmar no GitHub Desktop se `main` está sincronizada com `origin/main`, se há alterações locais e se a branch de trabalho foi criada.
+## Stack
+Java 21, Spring Boot, Maven, Spring Cloud Gateway, React, TypeScript, Vite, PostgreSQL, JWT e APIs REST com JSON.
+
+## Próximas frentes
+1. **Auth/Users — fundação:** criar o esqueleto do serviço e sua configuração para `ferragista_auth`. Não depende da decisão de como será criado o primeiro proprietário.
+2. **Auth/Users — usuários e login:** implementar cadastro autorizado, perfis e JWT. Definir a criação do primeiro proprietário antes de expor o cadastro.
+3. **Product/Stock:** CRUD de produtos; operação interna que valida todos os itens e baixa estoque; compensação idempotente por `saleId`.
+4. **Financial:** receitas, despesas e pagamento; fluxo de caixa e relatórios com acesso restrito ao proprietário.
+5. **Sales:** coordenar estoque e financeiro, guardar preços históricos e tratar cancelamento/reconciliação. Depende dos contratos dos serviços de estoque e financeiro.
+6. **Gateway e frontend:** definir a localização do Gateway, configurar as rotas e implementar as telas usando os contratos dos serviços.
+7. **Integração:** percorrer os fluxos do MVP e atualizar a documentação de operação.
+
+## Pendências de implementação
+- Definir a localização do API Gateway na árvore do repositório.
+- Definir como o primeiro usuário proprietário será criado.
+- Especificar as rotas REST de receitas manuais, despesas, pagamentos, fluxo de caixa e relatórios ao iniciar o Financial Service.
 
 ## Próxima ação
-- No GitHub Desktop, selecionar este repositório, conferir a branch e as alterações locais e executar **Fetch origin**.
-- Após confirmar sincronização, criar a branch para a primeira tarefa do Auth Service, seguindo o nome definido pelo grupo. Não iniciar implementação antes de conferir os documentos de arquitetura e o padrão de serviço.
-
-## Checklist do MVP
-- [ ] Preparar e revisar o Auth/Users Service (cadastro, login, perfis e JWT).
-- [ ] Implementar Product/Stock Service.
-- [ ] Implementar Sales Service com validação e baixa de estoque e geração da receita.
-- [ ] Implementar Financial Service: receitas, despesas pagas, fluxo de caixa e relatórios.
-- [ ] Definir a localização do API Gateway e implementar o encaminhamento REST.
-- [ ] Implementar frontend e permissões de proprietário e funcionário.
-- [ ] Integrar os serviços e validar os fluxos do MVP conforme os documentos.
+Concluir a revisão e integração do PR #21. Em seguida, iniciar a fundação do Auth/Users em branch própria, em uma tarefa por Pull Request.
 
 ## Atualização
-Ao concluir uma tarefa, marque o item correspondente e atualize somente o estado e a próxima ação. Mantenha decisões permanentes em `AGENTS.md` e os detalhes funcionais nos documentos de `docs/`.
+Ao concluir uma tarefa, marque-a no GitHub Projects e atualize aqui somente o estado e a próxima ação. Mantenha decisões permanentes em `AGENTS.md` e regras detalhadas nos documentos de `docs/`.

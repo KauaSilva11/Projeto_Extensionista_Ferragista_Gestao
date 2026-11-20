@@ -1,8 +1,8 @@
 # Arquitetura técnica — Ferragista
 
-**Status:** rascunho para revisão do grupo  
+**Status:** aprovada pelo grupo, sem alterações substantivas  
 **Base:** proposta técnica elaborada no projeto e decisões confirmadas nesta conversa.  
-**Observação:** este documento orienta o MVP e deve ser revisado pelo grupo antes de ser tratado como versão aprovada.
+**Observação:** este documento é a referência técnica aprovada para o MVP; detalhes operacionais indicados como pendentes serão definidos durante a implementação sem alterar as decisões aprovadas.
 
 ## 1. Visão geral
 
@@ -200,6 +200,7 @@ sequenceDiagram
 - Chamadas internas encaminham o JWT do usuário, que cada serviço valida; apenas o Gateway é acessível ao frontend.
 - Caminhos REST iniciais: POST /api/sales; POST /internal/stock/sales; POST /internal/financial/revenues; POST /internal/stock/sales/{saleId}/compensation. Rotas internas são acessíveis apenas pela rede dos serviços.
 - Respostas HTTP e formato comum dos erros conforme definidos na seção 6.
+
 
 
 

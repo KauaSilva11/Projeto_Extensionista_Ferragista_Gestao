@@ -64,6 +64,58 @@ Não envie senhas, tokens ou arquivos `.env` ao GitHub.
 - **Projects:** quadro para acompanhar o andamento das tarefas.
 - **Pull requests:** revisão e integração das alterações na `main`.
 
+## Criar e iniciar a estrutura de um serviço
+
+Cada responsável deve gerar o serviço da sua issue com o mesmo padrão.
+
+### 1. Configurações no Spring Initializr
+
+Acesse [start.spring.io](https://start.spring.io/) e selecione:
+
+- Project: Maven
+- Language: Java
+- Spring Boot: 4.2.0
+- Packaging: Jar
+- Configuration: Properties
+- Java: 21
+- Dependencies: Spring Web, Spring Data JPA, PostgreSQL Driver e Validation
+
+Use o mesmo `Group` nos quatro projetos: `br.com.ferragista`.
+
+Preencha `Artifact` e `Package name` conforme o serviço:
+
+| Serviço | Artifact | Package name |
+|---|---|---|
+| Auth/Users | `auth-service` | `br.com.ferragista.auth` |
+| Produtos e estoque | `product-stock-service` | `br.com.ferragista.productstock` |
+| Vendas | `sales-service` | `br.com.ferragista.sales` |
+| Financeiro | `financial-service` | `br.com.ferragista.financial` |
+
+O campo `Name` deve ser igual ao `Artifact`.
+
+Não adicione Spring Security na estrutura inicial do Auth: a issue #11 não inclui implementar login ou autorização nesta etapa.
+
+### 2. Colocar os arquivos no repositório
+
+1. Gere e baixe o projeto ZIP pelo Spring Initializr.
+2. Extraia o conteúdo diretamente na pasta correspondente:
+   - `services/auth-service/`
+   - `services/product-stock-service/`
+   - `services/sales-service/`
+   - `services/financial-service/`
+3. Preserve o README que já existe na pasta e atualize-o para explicar como compilar e iniciar o serviço.
+4. Confira se os arquivos `pom.xml`, `mvnw.cmd` e `src/` ficaram diretamente dentro da pasta do serviço, sem criar uma pasta duplicada dentro dela.
+
+### 3. Configurar e iniciar
+
+1. Confira a issue atribuída e configure a conexão ao banco usando variáveis de ambiente, sem incluir credenciais no código.
+2. Use o banco lógico correspondente ao serviço: `ferragista_auth`, `ferragista_estoque`, `ferragista_vendas` ou `ferragista_financeiro`.
+3. Para iniciar o PostgreSQL local, siga `infrastructure/postgres/README.md`.
+4. No terminal do VS Code, entre na pasta do serviço e execute:
+
+   ```powershell
+   .\mvnw.cmd spring-boot:run
+
 ## Prompt para iniciar uma tarefa
 
 Copie o prompt e preencha os campos entre colchetes com as informações da issue:
